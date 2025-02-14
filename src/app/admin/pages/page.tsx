@@ -28,7 +28,7 @@ export default function PageManagement() {
             </tr>
           </thead>
           <tbody>
-            {/* Contoh Data aaa*/}
+            {/* Contoh Data a*/}
             {[
               { id: 1, title: "Beranda", slug: "/beranda" },
               { id: 2, title: "Tentang Kami", slug: "/about" },
