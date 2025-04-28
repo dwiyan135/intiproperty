@@ -1,13 +1,23 @@
-// src/lib/db.ts
 import mysql from 'mysql2/promise'
 
-export const db = mysql.createPool({
-  host: 'localhost',        // ganti sesuai kebutuhan
-  user: 'root',             // user MySQL kamu
-  password: '',             // password MySQL kamu
-  database: 'intiproperty', // nama database yang tadi kita buat
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+export const connection = await mysql.createConnection({
+  host: 'localhost',
+  user: 'root',
+  password: '',
+  database: 'intiproperty'
+})
+
+const db = {
+  connection,
+  properti: 'properti',
+  properti_rumah: 'properti_rumah',
+  properti_apartemen: 'properti_apartemen',
+  properti_ruko: 'properti_ruko',
+  properti_gedung: 'properti_gedung',
+  properti_tanah: 'properti_tanah',
+  properti_lainnya: 'properti_lainnya',
+  foto_properti: 'foto_properti',
+  video_properti: 'video_properti'
+}
+
 export default db

@@ -1,310 +1,149 @@
-// File: src/app/api/properti/route.ts
+// 📁 File: app/api/properti/route.ts
 
-import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import type { RowDataPacket, ResultSetHeader } from 'mysql2'
+import { NextResponse } from 'next/server'
+import db from '@/lib/db'
 
-// ✅ GET - Ambil semua properti (Kode Baru)
-export async function GET(req: NextRequest) {
-  try {
-    const [rows] = await db.query<RowDataPacket[]>(
-      'SELECT * FROM properti ORDER BY dibuat_pada DESC'
-    )
-    return NextResponse.json(rows)
-  } catch (error) {
-    console.error('❌ Error saat GET properti:', error)
-    return NextResponse.json({ message: 'Internal Server Error', error }, { status: 500 })
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const userId = searchParams.get('user_id')
+  const status = searchParams.get('status')
+  const q = searchParams.get('q')
+
+  let query = `
+    SELECT p.*, f.url AS foto_utama
+    FROM properti p
+    LEFT JOIN foto_properti f ON f.id_properti = p.id AND f.is_utama = 1
+  `
+
+  let where: string[] = []
+  let params: any[] = []
+
+  if (userId) {
+    where.push('p.id_pengguna = ?')
+    params.push(userId)
   }
+  if (status) {
+    where.push('p.status = ?')
+    params.push(status)
+  }
+  if (q) {
+    where.push('p.judul LIKE ?')
+    params.push(`%${q}%`)
+  }
+
+  if (where.length > 0) {
+    query += ' WHERE ' + where.join(' AND ')
+  }
+
+  query += ' ORDER BY p.tanggal_mulai DESC'
+
+  const [rows] = await db.connection.execute(query, params)
+  return NextResponse.json(rows)
 }
 
-// ✅ POST - Tambah properti (Kode Baru)
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const {
-      // Kolom umum
-      judul, slug, deskripsi, harga, lokasi, alamat,
-      id_provinsi, id_kota, id_kecamatan, id_kelurahan,
-      id_tipe_properti, id_pengguna, dibuat_oleh,
-      garis_lintang, garis_bujur,
+    const body = await req.json()
 
-      // Rumah
-      jenis_properti_rumah, luas_tanah, luas_bangunan,
-      jumlah_kamar_tidur, jumlah_kamar_mandi, jumlah_lantai,
-      garasi, carport, daya_listrik, sumber_air, tahun_dibangun,
-      orientasi_bangunan, fasilitas_tambahan, kondisi_properti,
-      furnishing, sertifikat_rumah, akses_jalan, lebar_jalan_depan,
-      jarak_jalan_utama, bebas_banjir,
-
-      // Apartemen
-      tower, lantai, tipe_unit, luas_unit, biaya_perawatan,
-      akses_lift, jumlah_unit_per_lantai, view,
-      fasilitas_gedung, akses_keamanan, sertifikat_apartemen,
-
-      // Gedung
-      jumlah_lantai_gedung, kapasitas_parkir, peruntukan_gedung,
-      akses_transportasi, tahun_dibangun_gedung, sistem_keamanan,
-      luas_bangunan_total, fasilitas_gedung_tambahan,
-
-      // Tanah
-      lebar_depan, kontur_tanah, akses_jalan_tanah,
-      vegetasi, peruntukan_tanah, fasilitas_di_sekitar,
-      sertifikat_tanah,
-
-      // Ruko
-      jumlah_lantai_ruko, luas_tanah_ruko, luas_bangunan_ruko,
-      akses_kendaraan, jam_operasional, peruntukan_ruko,
-      sistem_keamanan_ruko, fasilitas_ruko_tambahan,
-
-      // Lainnya
-      tipe_khusus, deskripsi_tambahan
-    } = await req.json()
-
-    if (!judul || !slug || !harga || !lokasi || !id_tipe_properti || !id_pengguna || !dibuat_oleh) {
-      return NextResponse.json({ message: 'Field wajib tidak boleh kosong' }, { status: 400 })
+    const dataProperti = {
+      id_pengguna: body.id_pengguna,
+      id_agensi: body.id_agensi || null,
+      agen_pendamping: body.agen_pendamping || null,
+      judul: body.judul,
+      slug: body.slug,
+      id_tipe_properti: body.id_tipe_properti,
+      deskripsi: body.deskripsi,
+      harga: body.harga,
+      harga_nego: body.harga_nego || 0,
+      dp_minimal: body.dp_minimal || null,
+      estimasi_angsuran: body.estimasi_angsuran || null,
+      id_provinsi: body.id_provinsi,
+      id_kota: body.id_kota,
+      id_kecamatan: body.id_kecamatan,
+      id_kelurahan: body.id_kelurahan,
+      alamat_lengkap: body.alamat_lengkap,
+      kode_pos: body.kode_pos,
+      koordinat: body.koordinat,
+      status: 'aktif',
+      status_hunian: body.status_hunian,
+      verified: 0,
+      highlight: body.highlight || 0,
+      nama_proyek: body.nama_proyek || null,
+      nama_developer: body.nama_developer || null,
+      video_link: body.video_link || null,
+      link_virtual_tour: body.link_virtual_tour || null,
+      catatan_internal: body.catatan_internal || null,
+      tanggal_mulai: new Date(),
+      tanggal_berakhir: body.tanggal_berakhir || new Date(),
+      total_view: 0,
+      total_simpan: 0,
+      total_share: 0,
+      label_otomatis: null,
+      mode_rahasia: 0,
+      audit_score: 0,
+      prediksi_terjual_dalam_hari: null,
+      auto_renewal: 0,
+      dihasilkan_ai: 0
     }
 
-    const [result] = await db.query<ResultSetHeader>(
-      `INSERT INTO properti (
-        judul, slug, deskripsi, harga, lokasi, alamat,
-        id_provinsi, id_kota, id_kecamatan, id_kelurahan,
-        id_tipe_properti, id_pengguna, dibuat_oleh,
-        garis_lintang, garis_bujur,
-
-        jenis_properti_rumah, luas_tanah, luas_bangunan,
-        jumlah_kamar_tidur, jumlah_kamar_mandi, jumlah_lantai,
-        garasi, carport, daya_listrik, sumber_air, tahun_dibangun,
-        orientasi_bangunan, fasilitas_tambahan, kondisi_properti,
-        furnishing, sertifikat_rumah, akses_jalan, lebar_jalan_depan,
-        jarak_jalan_utama, bebas_banjir,
-
-        tower, lantai, tipe_unit, luas_unit, biaya_perawatan,
-        akses_lift, jumlah_unit_per_lantai, view,
-        fasilitas_gedung, akses_keamanan, sertifikat_apartemen,
-
-        jumlah_lantai_gedung, kapasitas_parkir, peruntukan_gedung,
-        akses_transportasi, tahun_dibangun_gedung, sistem_keamanan,
-        luas_bangunan_total, fasilitas_gedung_tambahan,
-
-        lebar_depan, kontur_tanah, akses_jalan_tanah,
-        vegetasi, peruntukan_tanah, fasilitas_di_sekitar,
-        sertifikat_tanah,
-
-        jumlah_lantai_ruko, luas_tanah_ruko, luas_bangunan_ruko,
-        akses_kendaraan, jam_operasional, peruntukan_ruko,
-        sistem_keamanan_ruko, fasilitas_ruko_tambahan,
-
-        tipe_khusus, deskripsi_tambahan
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?, ?,
-        ?, ?,
-
-        ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?,
-
-        ?, ?, ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?,
-
-        ?, ?, ?,
-        ?, ?, ?,
-        ?, ?,
-
-        ?, ?, ?,
-        ?, ?, ?,
-        ?,
-
-        ?, ?, ?,
-        ?, ?, ?,
-        ?, ?,
-
-        ?, ?
-      )`,
-      [
-        judul, slug, deskripsi, harga, lokasi, alamat,
-        id_provinsi, id_kota, id_kecamatan, id_kelurahan,
-        id_tipe_properti, id_pengguna, dibuat_oleh,
-        garis_lintang, garis_bujur,
-
-        jenis_properti_rumah, luas_tanah, luas_bangunan,
-        jumlah_kamar_tidur, jumlah_kamar_mandi, jumlah_lantai,
-        garasi, carport, daya_listrik, sumber_air, tahun_dibangun,
-        orientasi_bangunan, JSON.stringify(fasilitas_tambahan ?? []), kondisi_properti,
-        furnishing, sertifikat_rumah, akses_jalan, lebar_jalan_depan,
-        jarak_jalan_utama, bebas_banjir,
-
-        tower, lantai, tipe_unit, luas_unit, biaya_perawatan,
-        akses_lift, jumlah_unit_per_lantai, view,
-        JSON.stringify(fasilitas_gedung ?? []), JSON.stringify(akses_keamanan ?? []), sertifikat_apartemen,
-
-        jumlah_lantai_gedung, kapasitas_parkir, peruntukan_gedung,
-        JSON.stringify(akses_transportasi ?? []), tahun_dibangun_gedung,
-        JSON.stringify(sistem_keamanan ?? []), luas_bangunan_total,
-        JSON.stringify(fasilitas_gedung_tambahan ?? []),
-
-        lebar_depan, kontur_tanah, akses_jalan_tanah,
-        vegetasi, peruntukan_tanah, JSON.stringify(fasilitas_di_sekitar ?? []),
-        sertifikat_tanah,
-
-        jumlah_lantai_ruko, luas_tanah_ruko, luas_bangunan_ruko,
-        akses_kendaraan, jam_operasional, peruntukan_ruko,
-        JSON.stringify(sistem_keamanan_ruko ?? []),
-        JSON.stringify(fasilitas_ruko_tambahan ?? []),
-
-        tipe_khusus, deskripsi_tambahan
-      ]
+    const [result]: any = await db.connection.execute(
+      `INSERT INTO ${db.properti} SET ?`, [dataProperti]
     )
+    const id_properti = result.insertId
 
-    return NextResponse.json({
-      message: 'Properti berhasil ditambahkan',
-      id: result.insertId
-    }, { status: 201 })
-  } catch (error) {
-    console.error('❌ Error saat tambah properti:', error)
-    return NextResponse.json({ message: 'Internal Server Error', error }, { status: 500 })
-  }
-}
-
-/* 
-  -- KODE LAMA (disertakan sebagai komentar) --
-
-  import type { NextRequest, NextResponse } from 'next/server'
-  import { db } from '@/lib/db'
-  import { RowDataPacket, ResultSetHeader } from 'mysql2'
-
-  export async function GET(req: NextRequest) {
-    try {
-      const [rows] = await db.query<RowDataPacket[]>(
-        'SELECT * FROM properti ORDER BY dibuat_pada DESC'
+    const tipe = body.tipe
+    if (tipe === 'rumah' && body.rumah) {
+      await db.connection.execute(
+        `INSERT INTO ${db.properti_rumah} SET ?`, [{ ...body.rumah, id_properti }]
       )
-      return NextResponse.json(rows)
-    } catch (error) {
-      console.error('❌ Error saat GET properti:', error)
-      return NextResponse.json({ message: 'Internal Server Error', error }, { status: 500 })
-    }
-  }
-
-  // Method POST -> tambah data properti
-  export async function POST {
-    const {
-      // --- Kolom umum ---
-      judul,
-      slug,
-      deskripsi,
-      harga,
-      lokasi,
-      alamat,
-      id_provinsi,
-      id_kota,
-      id_kecamatan,
-      id_kelurahan,
-      id_tipe_properti,
-      id_pengguna,
-      dibuat_oleh,
-      garis_lintang,
-      garis_bujur,
-
-      // --- Kolom Rumah ---
-      jenis_properti_rumah,
-      luas_tanah,
-      luas_bangunan,
-      jumlah_kamar_tidur,
-      jumlah_kamar_mandi,
-      jumlah_lantai,
-      garasi,
-      carport,
-      daya_listrik,
-      sumber_air,
-      tahun_dibangun,
-      orientasi_bangunan,
-      fasilitas_tambahan,
-      kondisi_properti,
-      furnishing,
-      sertifikat_rumah,
-      akses_jalan,
-      lebar_jalan_depan,
-      jarak_jalan_utama,
-      bebas_banjir,
-
-      // --- Kolom Apartemen ---
-      tower,
-      lantai,
-      tipe_unit,
-      luas_unit,
-      biaya_perawatan,
-      akses_lift,
-      jumlah_unit_per_lantai,
-      view,
-      fasilitas_gedung,
-      akses_keamanan,
-      sertifikat_apartemen,
-
-      // --- Kolom Gedung ---
-      jumlah_lantai_gedung,
-      kapasitas_parkir,
-      peruntukan_gedung,
-      akses_transportasi,
-      tahun_dibangun_gedung,
-      sistem_keamanan,
-      luas_bangunan_total,
-      fasilitas_gedung_tambahan,
-
-      // --- Kolom Tanah ---
-      lebar_depan,
-      kontur_tanah,
-      akses_jalan_tanah,
-      vegetasi,
-      peruntukan_tanah,
-      fasilitas_di_sekitar,
-      sertifikat_tanah,
-
-      // --- Kolom Ruko ---
-      jumlah_lantai_ruko,
-      luas_tanah_ruko,
-      luas_bangunan_ruko,
-      akses_kendaraan,
-      jam_operasional,
-      peruntukan_ruko,
-      sistem_keamanan_ruko,
-      fasilitas_ruko_tambahan,
-
-      // --- Kolom lainnya ---
-      tipe_khusus,
-      deskripsi_tambahan
-    } = req.body
-
-    // Validasi sederhana untuk field wajib
-    if (!judul || !slug || !harga || !lokasi || !id_tipe_properti || !id_pengguna || !dibuat_oleh) {
-      return res.status(400).json({ message: 'Field wajib tidak boleh kosong' })
+    } else if (tipe === 'apartemen' && body.apartemen) {
+      await db.connection.execute(
+        `INSERT INTO ${db.properti_apartemen} SET ?`, [{ ...body.apartemen, id_properti }]
+      )
+    } else if (tipe === 'ruko' && body.ruko) {
+      await db.connection.execute(
+        `INSERT INTO ${db.properti_ruko} SET ?`, [{ ...body.ruko, id_properti }]
+      )
+    } else if (tipe === 'gedung' && body.gedung) {
+      await db.connection.execute(
+        `INSERT INTO ${db.properti_gedung} SET ?`, [{ ...body.gedung, id_properti }]
+      )
+    } else if (tipe === 'tanah' && body.tanah) {
+      await db.connection.execute(
+        `INSERT INTO ${db.properti_tanah} SET ?`, [{ ...body.tanah, id_properti }]
+      )
+    } else if (tipe === 'lainnya' && body.lainnya) {
+      await db.connection.execute(
+        `INSERT INTO ${db.properti_lainnya} SET ?`, [{ ...body.lainnya, id_properti }]
+      )
     }
 
-    // Lakukan penyisipan data ...
-    // ...
-    return res.status(201).json({ message: 'Properti berhasil ditambahkan', id: result.insertId })
+    if (body.foto_properti) {
+      let isUtamaFound = false
+      for (let i = 0; i < body.foto_properti.length; i++) {
+        const foto = { ...body.foto_properti[i] }
+        if (!isUtamaFound && foto.is_utama == 1) isUtamaFound = true
+        if (!isUtamaFound && i === 0) {
+          foto.is_utama = 1
+          isUtamaFound = true
+        }
+        await db.connection.execute(
+          `INSERT INTO ${db.foto_properti} SET ?`, [{ ...foto, id_properti }]
+        )
+      }
+    }
+
+    if (body.video_properti) {
+      for (const video of body.video_properti) {
+        await db.connection.execute(
+          `INSERT INTO ${db.video_properti} SET ?`, [{ ...video, id_properti }]
+        )
+      }
+    }
+
+    return NextResponse.json({ message: 'Properti berhasil ditambahkan', id: id_properti })
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: 'Terjadi kesalahan saat menambahkan properti' }, { status: 500 })
   }
-
-  // Jika method selain GET dan POST
-  return res.status(405).json({ message: 'Method Not Allowed' })
-}
-*/
-
-// ✅ Handler untuk method lain (mirip dengan kode lama yang menolak selain GET/POST).
-export async function PUT(req: NextRequest) {
-  console.error('❌ Method Not Allowed')
-  return NextResponse.json({ message: 'Method Not Allowed' }, { status: 405 })
-}
-
-export async function DELETE(req: NextRequest) {
-  console.error('❌ Method Not Allowed')
-  return NextResponse.json({ message: 'Method Not Allowed' }, { status: 405 })
-}
-
-export async function PATCH(req: NextRequest) {
-  console.error('❌ Method Not Allowed')
-  return NextResponse.json({ message: 'Method Not Allowed' }, { status: 405 })
 }

@@ -5,12 +5,13 @@ import jwt from 'jsonwebtoken'
 
 // Fungsi untuk simpan log login
 async function simpanLogLogin(
+  conn: any,
   id_pengguna: number | null,
   status: 'sukses' | 'gagal',
   login_via: string,
   ip: string
 ) {
-  await db.query(
+  await conn.execute(
     `INSERT INTO log_login_admin (id_pengguna, login_via, status, ip_address) VALUES (?, ?, ?, ?)`,
     [id_pengguna, login_via, status, ip]
   )
@@ -21,13 +22,15 @@ export async function POST(req: NextRequest) {
     const { login, kata_sandi } = await req.json()
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown'
 
-    const [rows]: any = await db.query(
+    const conn = await db.connection
+
+    const [rows]: any = await conn.execute(
       'SELECT * FROM pengguna WHERE (email = ? OR nama_pengguna = ?) AND jenis_akun = "admin"',
       [login, login]
     )
 
     if (!rows || rows.length === 0) {
-      await simpanLogLogin(null, 'gagal', login, ip)
+      await simpanLogLogin(conn, null, 'gagal', login, ip)
       return NextResponse.json({ message: 'Akun admin tidak ditemukan' }, { status: 401 })
     }
 
@@ -35,12 +38,12 @@ export async function POST(req: NextRequest) {
     const isMatch = await bcrypt.compare(kata_sandi, admin.kata_sandi)
 
     if (!isMatch) {
-      await simpanLogLogin(admin.id, 'gagal', login, ip)
+      await simpanLogLogin(conn, admin.id, 'gagal', login, ip)
       return NextResponse.json({ message: 'Kata sandi salah' }, { status: 401 })
     }
 
     // ✅ Berhasil login
-    await simpanLogLogin(admin.id, 'sukses', login, ip)
+    await simpanLogLogin(conn, admin.id, 'sukses', login, ip)
 
     // 🔐 Buat token JWT
     const token = jwt.sign(
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
       path: '/'
     })
 
-    // ✅ Tambahkan admin_id cookie agar bisa dibaca client-side (khusus debug)
+    // Optional: cookie tambahan untuk debug/admin_id
     response.cookies.set('admin_id', admin.id.toString(), {
       httpOnly: false,
       secure: true,

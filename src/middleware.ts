@@ -4,6 +4,7 @@ import { getClientIp } from '@/lib/get-client-ip'
 import { incrementRateLimit, isRateLimited } from '@/lib/rate-limit'
 import { verifyAdminToken } from '@/lib/verify-jwt'
 
+
 export function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
 
