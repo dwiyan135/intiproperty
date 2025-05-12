@@ -1,101 +1,53 @@
-// 📁 File: app/api/properti/duplicate/[id]/route.ts
-
+// src/app/api/properti/duplicate/[id]/route.ts
 import { NextResponse } from 'next/server'
 import db from '@/lib/db'
+import type { RowDataPacket, OkPacket } from 'mysql2'
+import type { Properti } from '@/types/properti'
 
-function generateNewSlug(original: string, existingSlugs: string[]): string {
-  const base = `${original}-copy`
-  if (!existingSlugs.includes(base)) return base
-
-  let count = 2
-  while (existingSlugs.includes(`${base}-${count}`)) {
-    count++
-  }
-  return `${base}-${count}`
-}
-
-export async function POST(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  const id = Number(params.id)
-  if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 })
-
-  const [rows]: any = await db.connection.execute(
-    'SELECT * FROM properti WHERE id = ?', [id]
-  )
-  if (!rows.length) return NextResponse.json({ error: 'Properti tidak ditemukan' }, { status: 404 })
-
-  const original = rows[0]
-  delete original.id
-
-  const [slugRows]: any = await db.connection.execute(
-    'SELECT slug FROM properti WHERE slug LIKE ?', [`${original.slug}%`]
-  )
-  const existingSlugs = slugRows.map((r: any) => r.slug)
-  const newSlug = generateNewSlug(original.slug, existingSlugs)
-
-  const now = new Date()
-  const newData = {
-    ...original,
-    slug: newSlug,
-    tanggal_mulai: now,
-    tanggal_berakhir: now,
-    total_view: 0,
-    total_simpan: 0,
-    total_share: 0,
-    status: 'draf',
-    highlight: 0,
-    verified: 0
-  }
-
-  const [insert]: any = await db.connection.execute(
-    'INSERT INTO properti SET ?', [newData]
-  )
-  const newId = insert.insertId
-
-  const tipeTable: Record<number, string> = {
-    1: 'properti_rumah',
-    2: 'properti_apartemen',
-    3: 'properti_gedung',
-    4: 'properti_tanah',
-    5: 'properti_ruko',
-    6: 'properti_lainnya'
-  }
-
-  const detailTable = tipeTable[original.id_tipe_properti]
-  if (detailTable) {
-    const [detail]: any = await db.connection.execute(
-      `SELECT * FROM ${detailTable} WHERE id_properti = ?`, [id]
+export async function POST(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const { id } = params
+    // ambil properti asli
+    const [origRows] = await db.connection.execute<RowDataPacket[]>(
+      `SELECT * FROM \`${db.properti}\` WHERE id = ?`,
+      [id]
     )
-    if (detail.length) {
-      const detailData = { ...detail[0] }
-      delete detailData.id_properti
-      await db.connection.execute(
-        `INSERT INTO ${detailTable} SET ?`, [{ ...detailData, id_properti: newId }]
+    const original = (origRows as Properti[])[0]
+    if (!original) return NextResponse.json({ error: 'Properti tidak ditemukan' }, { status: 404 })
+
+    // duplikasi properti (kecuali id dan timestamps)
+    const cols = Object.keys(original).filter(c => !['id', 'dibuat_pada', 'diperbarui_pada'].includes(c))
+    const vals = cols.map(c => (original as any)[c])
+    const placeholders = cols.map(() => '?')
+    const insertSql = `
+      INSERT INTO \`${db.properti}\` (${cols.join(',')})
+      VALUES (${placeholders.join(',')})
+    `
+    const [result] = await db.connection.execute<OkPacket>(insertSql, vals)
+    const newId = result.insertId
+
+    // duplikasi media
+    const [mediaRows] = await db.connection.execute<RowDataPacket[]>(
+      `SELECT * FROM \`${db.media_properti}\` WHERE id_properti = ?`,
+      [id]
+    )
+    const media = mediaRows as any[]
+    for (const m of media) {
+      await db.connection.execute<OkPacket>(
+        `INSERT INTO \`${db.media_properti}\` (id_properti, tipe_media, url, is_utama)
+         VALUES (?, ?, ?, ?)`,
+        [newId, m.tipe_media, m.url, m.is_utama]
       )
     }
-  }
 
-  const [fotos]: any = await db.connection.execute(
-    'SELECT * FROM foto_properti WHERE id_properti = ?', [id]
-  )
-  for (const foto of fotos) {
-    const { id, ...rest } = foto
-    await db.connection.execute(
-      'INSERT INTO foto_properti SET ?', [{ ...rest, id_properti: newId }]
+    // ambil properti baru
+    const [newRows] = await db.connection.execute<RowDataPacket[]>(
+      `SELECT * FROM \`${db.properti}\` WHERE id = ?`,
+      [newId]
     )
+    const newItem = (newRows as Properti[])[0]
+    return NextResponse.json({ data: newItem }, { status: 201 })
+  } catch (error) {
+    return NextResponse.json({ error: 'Gagal menduplikasi properti', details: (error as any).message }, { status: 500 })
   }
-
-  const [videos]: any = await db.connection.execute(
-    'SELECT * FROM video_properti WHERE id_properti = ?', [id]
-  )
-  for (const video of videos) {
-    const { id, ...rest } = video
-    await db.connection.execute(
-      'INSERT INTO video_properti SET ?', [{ ...rest, id_properti: newId }]
-    )
-  }
-
-  return NextResponse.json({ message: 'Duplikat berhasil', id_baru: newId })
 }

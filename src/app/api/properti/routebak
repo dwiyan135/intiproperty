@@ -1,0 +1,75 @@
+// src/app/api/properti/route.ts
+import { NextResponse } from 'next/server'
+import db from '@/lib/db'
+import type { Properti } from '@/types/properti'
+import type { RowDataPacket, OkPacket } from 'mysql2'
+
+/**
+ * GET /api/properti
+ *   - ambil semua properti
+ */
+export async function GET(req: Request) {
+  const sql = `
+    SELECT * 
+      FROM \`${db.properti}\` 
+    ORDER BY tanggal_mulai DESC
+  `
+  const [rows] = await db.connection.execute<RowDataPacket[]>(sql)
+  const data = rows as Properti[]
+  return NextResponse.json({ data })
+}
+
+/**
+ * POST /api/properti
+ *   - buat properti baru
+ */
+export async function POST(req: Request) {
+  const body = (await req.json()) as Partial<Properti>
+
+  // validasi minimal
+  if (!body.judul || !body.id_pengguna || !body.id_tipe_properti) {
+    return NextResponse.json(
+      { error: 'Fields judul, id_pengguna & id_tipe_properti wajib diisi' },
+      { status: 400 }
+    )
+  }
+
+  // siapkan kolom dan nilai
+  const fields = [
+    'id_pengguna','id_agensi','judul','slug','id_tipe_properti','deskripsi',
+    'harga','harga_nego','dp_minimal','estimasi_angsuran',
+    'id_provinsi','id_kota','id_kecamatan','id_kelurahan',
+    'alamat_lengkap','kode_pos','koordinat',
+    'status','status_hunian','verified','highlight',
+    'nama_proyek','nama_developer','catatan_internal',
+    'tanggal_berakhir','auto_renewal'
+  ] as const
+
+  const cols: string[]       = []
+  const placeholders: string[]= []
+  const vals: any[]          = []
+
+  for (const key of fields) {
+    if (body[key] !== undefined) {
+      cols.push(`\`${key}\``)
+      placeholders.push('?')
+      // @ts-ignore
+      vals.push(body[key])
+    }
+  }
+
+  const insertSql = `
+    INSERT INTO \`${db.properti}\` (${cols.join(',')})
+    VALUES (${placeholders.join(',')})
+  `
+  const [result] = await db.connection.execute<OkPacket>(insertSql, vals)
+  const insertId = result.insertId
+
+  // ambil kembali data yang baru dibuat
+  const [newRows] = await db.connection.execute<RowDataPacket[]>(
+    `SELECT * FROM \`${db.properti}\` WHERE id = ?`,
+    [insertId]
+  )
+  const newItem = (newRows as Properti[])[0]
+  return NextResponse.json({ data: newItem }, { status: 201 })
+}

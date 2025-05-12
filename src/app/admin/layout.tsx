@@ -5,18 +5,30 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   Menu, X, Users, Home, FileBarChart2,
-  LogOut, Settings, ScrollText, ShieldCheck, LayoutDashboard
+  LogOut, Settings, ScrollText, ShieldCheck, LayoutDashboard,
+  MapPin, ChevronDown, ChevronUp, Flag, Landmark, Building2, Navigation2
 } from 'lucide-react'
 
 export default function Layout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [lokasiOpen, setLokasiOpen] = useState(false)
 
   const menu = [
     { label: 'Dashboard', href: '/admin', icon: <LayoutDashboard className="w-5 h-5 mr-3" /> },
     { label: 'Manajemen Pengguna', href: '/admin/pengguna', icon: <Users className="w-5 h-5 mr-3" /> },
     { label: 'Properti', href: '/admin/properti', icon: <Home className="w-5 h-5 mr-3" /> },
+  ]
+
+  const lokasiSubmenu = [
+    { label: 'Provinsi', href: '/admin/lokasi/provinsi', icon: <Flag className="w-4 h-4 mr-2" /> },
+    { label: 'Kota/Kabupaten', href: '/admin/lokasi/kota', icon: <Landmark className="w-4 h-4 mr-2" /> },
+    { label: 'Kecamatan', href: '/admin/lokasi/kecamatan', icon: <Building2 className="w-4 h-4 mr-2" /> },
+    { label: 'Kelurahan', href: '/admin/lokasi/kelurahan', icon: <Navigation2 className="w-4 h-4 mr-2" /> },
+  ]
+
+  const lainnya = [
     { label: 'Booster', href: '/admin/booster', icon: <ShieldCheck className="w-5 h-5 mr-3" /> },
     { label: 'Membership', href: '/admin/membership', icon: <ScrollText className="w-5 h-5 mr-3" /> },
     { label: 'Laporan', href: '/admin/laporan', icon: <FileBarChart2 className="w-5 h-5 mr-3" /> },
@@ -29,9 +41,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       const res = await fetch('/api/logout-admin', { method: 'POST' })
       const data = await res.json()
       alert(data.message)
-      // Redirect ke halaman login-admin
       window.location.href = '/login-admin'
-    } catch (err) {
+    } catch {
       alert('Logout gagal')
     }
   }
@@ -56,20 +67,64 @@ export default function Layout({ children }: { children: ReactNode }) {
         `}
       >
         <div>
-          {/* Hanya muncul di layar Lebar */}
           <h2 className="text-2xl font-bold mb-8 text-center lg:text-left hidden lg:block">
             Admin Panel
           </h2>
+
           <nav className="space-y-1">
             {menu.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
-                className={`
-                  flex items-center px-4 py-2 rounded-md hover:bg-gray-700 transition
-                  ${pathname === item.href ? 'bg-gray-800 font-semibold' : 'text-gray-200'}
-                `}
+                className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-700 transition ${
+                  pathname === item.href ? 'bg-gray-800 font-semibold' : 'text-gray-200'
+                }`}
+              >
+                {item.icon}
+                <span className="text-sm sm:text-base">{item.label}</span>
+              </Link>
+            ))}
+
+            {/* Submenu Lokasi */}
+            <div className="text-gray-200">
+              <button
+                onClick={() => setLokasiOpen(!lokasiOpen)}
+                className="flex items-center w-full px-4 py-2 rounded-md hover:bg-gray-700 transition"
+              >
+                <MapPin className="w-5 h-5 mr-3" />
+                <span className="flex-1 text-left text-sm sm:text-base">Lokasi</span>
+                {lokasiOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+
+              {lokasiOpen && (
+                <div className="ml-8 mt-1 space-y-1">
+                  {lokasiSubmenu.map((sub) => (
+                    <Link
+                      key={sub.href}
+                      href={sub.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`flex items-center px-2 py-1 rounded hover:bg-gray-700 text-sm ${
+                        pathname === sub.href ? 'bg-gray-800 font-semibold' : 'text-gray-300'
+                      }`}
+                    >
+                      {sub.icon}
+                      {sub.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Menu lainnya */}
+            {lainnya.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center px-4 py-2 rounded-md hover:bg-gray-700 transition ${
+                  pathname === item.href ? 'bg-gray-800 font-semibold' : 'text-gray-200'
+                }`}
               >
                 {item.icon}
                 <span className="text-sm sm:text-base">{item.label}</span>
@@ -77,6 +132,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             ))}
           </nav>
         </div>
+
         <button
           onClick={handleLogout}
           className="mt-6 w-full text-left px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 transition"

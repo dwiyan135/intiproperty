@@ -16,8 +16,9 @@ const db = {
   properti_gedung: 'properti_gedung',
   properti_tanah: 'properti_tanah',
   properti_lainnya: 'properti_lainnya',
-  foto_properti: 'foto_properti',
-  video_properti: 'video_properti'
+  media_properti: 'media_properti',
+  tipe_properti: 'tipe_properti',
+
 }
 
 export default db

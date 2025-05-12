@@ -1,12 +1,10 @@
-// File: src/app/api/log-login-admin/route.ts
-
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import db from '@/lib/db' // kamu pakai export default
 import type { RowDataPacket } from 'mysql2'
 
 export async function GET(req: NextRequest) {
   try {
-    const [rows] = await db.query<RowDataPacket[]>(
+    const [rows] = await db.connection.query<RowDataPacket[]>(
       `
       SELECT l.id, l.login_via, l.status, l.ip_address, l.waktu_login,
              p.nama_pengguna AS nama_admin, p.email

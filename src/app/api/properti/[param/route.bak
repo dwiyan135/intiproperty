@@ -1,0 +1,66 @@
+// src/app/api/properti/[param]/route.ts
+import { NextResponse } from 'next/server'
+import db from '@/lib/db'
+
+const detailMap: Record<string,string> = {
+  '1': db.properti_rumah,
+  '2': db.properti_apartemen,
+  '3': db.properti_gedung,
+  '4': db.properti_tanah,
+  '5': db.properti_ruko,
+  '6': db.properti_lainnya,
+}
+
+export async function GET(req: Request, { params }: { params: { param: string } }) {
+  const key = params.param
+  const by   = isNaN(+key) ? 'slug' : 'id'
+  const [rows]: any = await db.connection.execute(
+    `SELECT * FROM \`${db.properti}\` WHERE \`${by}\` = ? LIMIT 1`,
+    [key]
+  )
+  if (!rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const prop = rows[0]
+  const tbl  = detailMap[prop.id_tipe_properti.toString()]
+  if (tbl) {
+    const [det]: any = await db.connection.execute(
+      `SELECT * FROM \`${tbl}\` WHERE id_properti = ? LIMIT 1`, [prop.id]
+    )
+    prop.detail = det[0] ?? null
+  }
+  return NextResponse.json(prop)
+}
+
+export async function PUT(req: Request, { params }: any) {
+  const key = params.param
+  const by  = isNaN(+key) ? 'slug' : 'id'
+  const body = await req.json()
+  // *update properti utama
+  const baseFields = Object.keys(body).filter(k=>k!=='detail')
+  const setClause  = baseFields.map(f=>`\`${f}\` = ?`).join(', ')
+  const values     = baseFields.map(f=>body[f]).concat(key)
+  await db.connection.execute(
+    `UPDATE \`${db.properti}\` SET ${setClause} WHERE \`${by}\` = ?`, values
+  )
+  // *update detail
+  if (body.detail) {
+    const tbl = detailMap[body.id_tipe_properti.toString()]
+    const detKeys = Object.keys(body.detail)
+    if (tbl && detKeys.length) {
+      const detSet = detKeys.map(k=>`\`${k}\` = ?`).join(', ')
+      const detVal = detKeys.map(k=>body.detail[k]).concat(body.id)
+      await db.connection.execute(
+        `UPDATE \`${tbl}\` SET ${detSet} WHERE id_properti = ?`, detVal
+      )
+    }
+  }
+  return NextResponse.json({ message: 'Updated' })
+}
+
+export async function DELETE(_req: Request, { params }: any) {
+  const key = params.param
+  const by  = isNaN(+key) ? 'slug' : 'id'
+  await db.connection.execute(
+    `DELETE FROM \`${db.properti}\` WHERE \`${by}\` = ?`, [key]
+  )
+  return NextResponse.json({ message: 'Deleted' })
+}
